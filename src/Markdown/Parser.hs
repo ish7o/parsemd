@@ -7,6 +7,7 @@ data Block
   = CodeBlock (Maybe String) String
   | Heading Int String
   | List [String]
+  | Paragraph [Inline]
   deriving Show
 
 data Inline
@@ -148,11 +149,16 @@ parseList = do
       char ' '
       manyTill anyChar (char '\n')
 
-
-
+parseParagraph :: Parser Block
+parseParagraph = Paragraph . concat <$> manyTill parseInlines (void (string "\n\n") <|> eof)
 
 parseBlock :: Parser Block
-parseBlock = (parseHeading <|> parseCodeBlock <|> parseList) <* (skipWhitespace <|> eof)
+parseBlock = (
+  parseHeading
+  <|> parseCodeBlock
+  <|> parseList
+  <|> parseParagraph
+  ) <* (skipWhitespace <|> eof)
 
 parseBlocks :: Parser [Block]
 parseBlocks = many parseBlock
