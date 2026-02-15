@@ -77,6 +77,12 @@ string (c:cs) =
 manyTill :: Parser a -> Parser end -> Parser [a]
 manyTill p end = (end >> pure []) <|> (:) <$> p <*> manyTill p end
 
+someTill :: Parser a -> Parser end -> Parser [a]
+someTill p end = do
+  f <- p
+  rest <- manyTill p end
+  pure $ f:rest
+
 eof :: Parser ()
 eof = Parser $ \case
     [] -> Just ((),[])
@@ -115,7 +121,7 @@ parseNewline = do
 
 parseInline = parseBold <|> parseItalic <|> parseCode <|> parseText <|> parseNewline
 
-parseInlines = many parseInline
+parseInlines = some parseInline
 
 -- Blocks
 
@@ -150,7 +156,7 @@ parseList = do
       manyTill anyChar (char '\n')
 
 parseParagraph :: Parser Block
-parseParagraph = Paragraph . concat <$> manyTill parseInlines (void (string "\n\n") <|> eof)
+parseParagraph = Paragraph <$> someTill parseInline (void (string "\n\n") <|> eof)
 
 parseBlock :: Parser Block
 parseBlock = (
@@ -161,7 +167,7 @@ parseBlock = (
   ) <* (skipWhitespace <|> eof)
 
 parseBlocks :: Parser [Block]
-parseBlocks = many parseBlock
+parseBlocks = some parseBlock
 
 parseDoc :: String -> MarkdownDoc
 parseDoc input = case runParser parseBlocks input of
