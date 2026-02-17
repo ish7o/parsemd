@@ -10,10 +10,13 @@ import Data.Char (isDigit)
 data ListType = Ordered | Unordered
   deriving (Show)
 
+data ListItem = ListItem [Inline] [ListItem]
+  deriving (Show)
+
 data Block
   = CodeBlock (Maybe String) String
   | Heading Int String
-  | List ListType [String]
+  | List ListType [ListItem]
   | Paragraph [Inline]
   deriving (Show)
 
@@ -171,24 +174,35 @@ parseCodeBlock = do
     [] -> pure $ CodeBlock Nothing code
     _ -> pure $ CodeBlock (Just lang) code
 
-parseList :: Parser Block
-parseList = do
-  items <- some parseListItem
-  pure $ List Unordered items
+parseUnorderedList :: Int -> Parser Block
+parseUnorderedList level = List Unordered <$> some (parseListItem level)
   where
-    parseListItem = do
-      string "- "
-      manyTill anyChar (void (char '\n') <|> eof)
+    parseListItem level = do
+      indent <- sum . map (\x -> if x == ' ' then 1 else 2) <$> many (char ' ' <|> char '\t')
+      if indent == level
+        then do
+          string "- "
+          text <- manyTill anyChar (void (char '\n') <|> eof)
+          case runParser parseInlines text of
+            Nothing -> empty
+            Just (inlines, _) -> do
+              ListItem inlines <$> many (parseListItem $ level + 2)
+        else empty
 
-parseOrderedList :: Parser Block
-parseOrderedList = do
-  items <- some parseListItem
-  pure $ List Ordered items
+parseOrderedList :: Int -> Parser Block
+parseOrderedList level = List Ordered <$> some (parseListItem level)
   where
-    parseListItem = do
-      satisfy isDigit
-      string ". "
-      manyTill anyChar (void (char '\n') <|> eof)
+    parseListItem level = do
+      indent <- sum . map (\x -> if x == ' ' then 1 else 2) <$> many (char ' ' <|> char '\t')
+      if indent == level
+        then do
+          satisfy isDigit
+          string ". "
+          text <- manyTill anyChar $ void (char '\n') <|> eof
+          case runParser parseInlines text of
+            Nothing -> empty
+            Just (inlines, _) -> ListItem inlines <$> many (parseListItem $ level + 2)
+        else empty
 
 parseParagraph :: Parser Block
 parseParagraph = Paragraph <$> someTill parseInline (void (string "\n\n") <|> eof)
@@ -197,8 +211,8 @@ parseBlock :: Parser Block
 parseBlock =
   ( parseHeading
       <|> parseCodeBlock
-      <|> parseList
-      <|> parseOrderedList
+      <|> parseUnorderedList 0
+      <|> parseOrderedList 0
       <|> parseParagraph
   )
     <* (skipWhitespace <|> eof)
