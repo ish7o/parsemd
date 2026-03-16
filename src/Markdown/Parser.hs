@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Parser where
+module Markdown.Parser where
 
 import Control.Applicative (Alternative (..))
 import Control.Monad (void)
@@ -16,16 +16,19 @@ data ListItem = ListItem [Inline] [ListItem]
 data Block
   = CodeBlock (Maybe String) String
   | Heading Int String
+  | BlockQuote String
+  | HorizontalRule
   | List ListType [ListItem]
   | Paragraph [Inline]
   deriving (Show)
 
 data Inline
   = Text String
-  | Bold String
-  | Italic String
+  | Bold [Inline]
+  | Italic [Inline]
   | Code String
   | Link [Inline] String
+  | Strikethrough String
   | Newline
   deriving (Show)
 
@@ -107,13 +110,13 @@ skipWhitespace = void $ many (char '\n' <|> char ' ' <|> char '\t')
 
 parseBold = do
   string "**"
-  text <- manyTill anyChar (char '*')
+  text <- someTill parseInline (char '*')
   char '*'
   pure $ Bold text
 
 parseItalic = do
   char '*'
-  text <- manyTill anyChar (char '*')
+  text <- someTill parseInline (char '*')
   pure $ Italic text
 
 parseCode = do
@@ -129,15 +132,15 @@ parseLink = do
   link <- someTill anyChar (char ')')
   pure $ Link inlines link
 
--- char '('
--- link <- someTill anyChar (char ')')
--- pure $ Link text link
---
 parseText = do
   text <- some (satisfy (`notElem` ['*', '`', '\n']))
   pure $ Text text
 
-parseStrikethrough = undefined
+parseStrikethrough :: Parser Inline
+parseStrikethrough = do
+  string "~~"
+  text <- someTill anyChar (string "~~")
+  pure $ Strikethrough text
 
 parseNewline = do
   char '\n'
@@ -173,6 +176,18 @@ parseCodeBlock = do
   case lang of
     [] -> pure $ CodeBlock Nothing code
     _ -> pure $ CodeBlock (Just lang) code
+
+parseBlockQuote :: Parser Block
+parseBlockQuote = do
+  string "> "
+  quote <- someTill anyChar (char '\n')
+  pure $ BlockQuote quote
+
+parseHorizontalRule :: Parser Block
+parseHorizontalRule = do
+  string "---"
+  void (char '\n') <|> eof
+  pure HorizontalRule
 
 parseUnorderedList :: Int -> Parser Block
 parseUnorderedList level = List Unordered <$> some (parseListItem level)
@@ -211,6 +226,8 @@ parseBlock :: Parser Block
 parseBlock =
   ( parseHeading
       <|> parseCodeBlock
+      <|> parseBlockQuote
+      <|> parseHorizontalRule
       <|> parseUnorderedList 0
       <|> parseOrderedList 0
       <|> parseParagraph

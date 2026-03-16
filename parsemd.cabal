@@ -1,0 +1,30 @@
+cabal-version: 3.0
+name:          parsemd
+version:       0.1.0.0
+license:       BSD-3-Clause
+license-file:  LICENSE
+author:        ishto
+build-type:    Simple
+
+common warnings
+  ghc-options: -Wall
+
+library
+  exposed-modules:  Markdown.Parser
+  build-depends:
+    , base  ^>=4.21.0.0
+    , text
+
+  hs-source-dirs:   src
+  default-language: Haskell2010
+
+executable parsemd
+  import:           warnings
+  main-is:          Main.hs
+  build-depends:
+    , base     ^>=4.21.0.0
+    , parsemd
+    , text
+
+  hs-source-dirs:   app
+  default-language: Haskell2010

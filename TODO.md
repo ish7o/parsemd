@@ -1,0 +1,2 @@
+- [ ] Recursive list parsing
+- [ ] Escape characters e.g. "\*text*"
